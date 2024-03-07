@@ -36,6 +36,7 @@ __global__ void embeddingFunctor(   const int* input_tokenId,
 }
 
 
+//该函数主要配置了kernel的grid与block大小
 template<typename T>
 void launchInputEmbedding(  TensorWrapper<int>* input_ids,      //输入INT[token num]
                             TensorWrapper<T>*   output,         //输出[token num, hidden size]
