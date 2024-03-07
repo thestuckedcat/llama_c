@@ -1,6 +1,6 @@
 /*
   * Maintenaned by StuckedCat
-  * main: 529853411@qq.com
+  * mail: 529853411@qq.com
 
   This headfile define a general used data structure Tensor
 
@@ -17,7 +17,7 @@
 
   5.        subclass:             TensorWrapper<T>        Contain the specific data of type T
 
-  6.        class:                TensorMap               Used to store the key-value pair of <Tensor*, string>,
+  6.        class:                TensorMap               Used to store the key-value pair of <string, Tensor*>,
 
 */
 
@@ -256,9 +256,85 @@ public:
     //std::initializer_list<>支持类似TensorMap({{},{}})这样传参
     TensorMap(std::initializer_list<std::pair<std::string, Tensor*>> tensor_map){
         for(auto& pair:tensor_map){
-            if(pair.second->data_check() == false){
-                
+            if(pair.second->data_is_null() == false){
+                insert(pair.first, pair.second);
+            }
+            else{
+                std::cout << "this is not a valid tensor, skip to insert into tensormap" << std::endl;
             }
         }
+    }
+
+    ~TensorMap(){
+        tensor_map_.clear();
+    }
+
+    inline size_t size() const{
+        return tensor_map_.size();
+    }
+
+    inline bool isExist(const std::string& key) const{
+        return tensor_map_.find(key) != tensor_map_.end();
+    }
+
+    inline bool isValid(const Tensor* tensor){
+        return tensor->size() > 0;
+    }
+
+    // add
+    inline void insert(const std::string& key, Tensor* value){
+        tensor_map_[key] = value;
+    }
+
+    inline void insert(std::pair<std::string,Tensor*> p){
+        tensor_map_.insert(p);
+    }
+
+    // find
+    inline Tensor* at(const std::string& key){
+        if(isExist(key)){
+            return tensor_map_.at(key);
+        }
+        LLM_CHECK_WITH_INFO(isExist(key), fmtstr("Cannot find a tensor of name %s in the tensor map (keys: %s)",
+                                  key.c_str(),
+                                  vec2str(keys()).c_str()));
+        return tensor_map_.at(key);
+    }
+
+    inline Tensor* operator[](const std::string& key)
+    {
+        LLM_CHECK_WITH_INFO(isExist(key), fmtstr("Cannot find a tensor of name %s in the tensor map    (keys: %s)",
+                                  key.c_str(),
+                                  vec2str(keys()).c_str()));
+        return tensor_map_.at(key);
+
+    }
+    // change
+
+    // delete
+
+    // Debug, 输出tensormap所有的string
+    std::vector<std::string> keys() const{
+        std::vector<std::string> key_names;
+        for(auto& kv : tensor_map_){
+            key_names.push_back(kv.first);
+        }
+        return key_names;
+    }
+
+    //打印tensormap所有的key
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "{";
+        std::vector<std::string> key_names = keys();
+        for (size_t i = 0; i < tensor_map_.size(); ++i) {
+            ss << key_names[i] << ": " << at(key_names[i])->toString();
+            if (i < tensor_map_.size() - 1) {
+                ss << ", ";
+            }
+        }
+        ss << "}";
+        return ss.str();
     }
 }
