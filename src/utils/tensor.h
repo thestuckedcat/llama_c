@@ -337,4 +337,4 @@ public:
         ss << "}";
         return ss.str();
     }
-}
+};
