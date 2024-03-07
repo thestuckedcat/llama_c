@@ -17,6 +17,7 @@
 # include<stdio.h>
 # include "src/kernels/input_embedding.h"
 # include "src/utils/cuda_debug_utils.cuh"
+
 template<typename T>
 __global__ void embeddingFunctor(   const int* input_tokenId,
                                     T* output,
