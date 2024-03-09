@@ -132,7 +132,8 @@ public:
   // Debug函数，用以返回包含相关信息的字符串
   std::string DeviceString() const
   {
-    constexpr static const std::unordered_map<Device, std::string> devicestring{
+    //unordered_map拥有复杂的内存分配，因此不能使用constexpr
+    static const std::unordered_map<Device, std::string> devicestring{
         {Device::CPU, "CPU"},
         {Device::CPU_PINNED, "CPU_PINNED"},
         {Device::GPU, "GPU"}};
@@ -145,16 +146,16 @@ public:
   {
     std::string device_info = DeviceString();
 
-    constexpr static const std::unordered_map<DataType, std::string> type_to_string{
+    static const std::unordered_map<DataType, std::string> type_to_string{
         {DataType::INT8, "INT8"},
         {DataType::INT32, "INT32"},
         {DataType::FP16, "FP16"},
         {DataType::FP32, "FP32"}};
 
     return fmtstr("Tensor[where = %s, type = %s, shape = %s]",
-                  device_str.c_str(),
+                  device_info.c_str(),
                   type_to_string.at(dtype).c_str(),
-                  vec2str(shape), c_str());
+                  vec2str(shape).c_str());
   }
 
   // 检查data是否为空
@@ -184,7 +185,7 @@ public:
   }
 
   // 获取数据形状
-  virtual int size() override const
+  virtual int size() const override
   {
     if (data == nullptr || shape.size() == 0)
     {
@@ -218,7 +219,7 @@ public:
   }
 
   // Debug选项
-  virtual std::string toString() override const
+  virtual std::string toString() const override
   {
     std::string device_str = DeviceString();
 
@@ -235,7 +236,7 @@ public:
   }
 
   // 检查data是否为空
-  virtual bool data_is_null() override const
+  virtual bool data_is_null() const override
   {
     return data == nullptr;
   }
