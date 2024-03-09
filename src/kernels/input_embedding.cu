@@ -17,6 +17,7 @@
 # include<stdio.h>
 # include "src/kernels/input_embedding.h"
 # include "src/utils/cuda_debug_utils.cuh"
+# include<cassert>
 
 template<typename T>
 __global__ void embeddingFunctor(   const int* input_tokenId,
@@ -46,7 +47,7 @@ void launchInputEmbedding(  TensorWrapper<int>* input_ids,      //输入INT[toke
         const int max_context_token_num = output->shape[0];
         const int hidden_size = output->shape[1];
         const int gridSize = 2048;
-        assert(max_context_token_num == inpout_ids->shape[0]);//这两个需要相同
+        assert(max_context_token_num == input_ids->shape[0]);//这两个需要相同
 
         embeddingFunctor<T><<<gridSize, blockSize>>>(   input_ids->data,
                                                         output->data, 
