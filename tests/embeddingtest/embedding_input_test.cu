@@ -50,7 +50,10 @@ void cpuEmbedding(  const int* input_ids,
 // compare and output the abnormal value and its context
 // float* cpu_output: malloc from cpu malloc
 // float* gpu_output: malloc from cuda malloc
-bool checkResults(float* cpu_output, float* gpu_output, const int output_size){
+void checkResults(float* cpu_output, float* gpu_output, const int output_size){
+
+    bool flag = true;
+
     // Data transmission, from gpu to cpu, first apply cpu memory to recieve data
     float* gpu_output_cpu = (float*) malloc(output_size * sizeof(float));
     //float* gpu_output_cpu = new float[output_size];
@@ -76,12 +79,15 @@ bool checkResults(float* cpu_output, float* gpu_output, const int output_size){
             }
 
             std::cout << std::endl;
-            return false;
         }
     }
 
     free(gpu_output_cpu);
-    return true;
+    if(flag){
+        std::cout << "CPU result is as same as GPU result" << std::endl;
+    }else{
+        std::cout << "CPU result is not same as GPU result" << std::endl;
+    }
 }
 
 
@@ -100,7 +106,8 @@ int main(int argc, char* argv[]){
 
     int* cpu_input = (int*) malloc(input_size * sizeof(int));
     float* cpu_table    = (float*)malloc(table_size * sizeof(float));   //用于存储vocabulary
-    float* cpu_output_from_gpu   = (float*)malloc(table_size * sizeof(float));
+
+
 
 
     std::cout << "Initializing memory on host" << std::endl;
@@ -149,7 +156,7 @@ int main(int argc, char* argv[]){
 
     std::cout << "init memory on device" << std::endl;
     CHECK(cudaMemcpy(gpu_input, cpu_input, input_size * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(gpu_table, cpu_table, table_size * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(gpu_table, cpu_table, table_size * sizeof(float), cudaMemcpyHostToDevice));
     std::cout << "Finish copy to device" << std::endl;
 
 
@@ -172,25 +179,18 @@ int main(int argc, char* argv[]){
     // 启动内核，结果存在cudamalloc得到的output中
     launchInputEmbedding(input_ids, output, &emb_table);
 
-    // 获取结果
-    CHECK(cudaMemcpy(cpu_output_from_gpu, output->data, output_size * sizeof(float), cudaMemcpyDeviceToHost));
+    //对比结果-(malloc, cudamalloc, outputsize)
+    checkResults(cpu_output, gpu_output, output_size);
 
     //释放内存
     cudaFree(gpu_output);
     cudaFree(gpu_table);
     cudaFree(gpu_input);
 
-
-
-    //对比结果
-    std::cout << "CPU与GPU Embedding的一致性为" << checkResults(cpu_output, cpu_output_from_gpu, output_size) << std::endl;
-
-
     //
     free(cpu_input);
     free(cpu_output);
     free(cpu_table);
-    free(cpu_output_from_gpu);
 
 
 }
