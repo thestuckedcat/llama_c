@@ -15,7 +15,11 @@ list(APPEND CMAKE_MODULE_PATH ${CUDA_PATH}/lib64)
     # CMAKE_MODULE_PATH:用于指定CMake查找模块的额外路径，此处添加CUDA_PATH/lib64到查找路径
 
 
-# 设置编译器标志
+#[[
+    设置编译器标志
+]]
+
+
 # 固有字段CMAKE_C_FLAGS,CMAKE_CXX_FLAGS,CMAKE_CUDA_FLAGS
 
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}")
@@ -237,7 +241,7 @@ add_library(llmengine OBJECT
 # add_subdirectory(tests)
 # add_subdirectory(examples)
 
-add_executable(main tests/embeddingtest/embedding_input_test.cu)
+add_executable(main tests/paddingoffsettest/padding_offset_test.cu)
 target_link_libraries(main PUBLIC -lcublas -lcudart -lcudadevrt llmengine)
 
 
