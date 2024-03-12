@@ -6,7 +6,12 @@
 #include<vector>
 
 #include "src/kernels/paddingoffset.h"
-
+/*
+    生成了输入Input：一个batch内每个句子的长度
+    获得输出：
+    paddingoffset:每个句子的token在padding后应该向前移动以回归padding前的距离
+    cumsum: 一个batch内句子长度的前缀和。
+*/
 int main(){
     const int batch_size = 5;
     const int max_q_len = 10;
