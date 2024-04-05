@@ -64,12 +64,14 @@ __global__ void RMSNorm(T* decoder_in,  //[num tokens(batch size), q_hidden_unit
     float thread_sum = 0.0f;
     // 将当前block对应的decoder_in数据切割
     Vec_t* dout = reinterpret_cast<Vec_t*>(decoder_in + blockIdx.x * hidden_units);//注意我们的blockDim.x实际上是hidden_units/vec_size，这里容易搞混
-    Vec_t* rsd;
-    rsd = reinterpret_cast<Vec_t*>(decoder_residual + blockIdx.x * hidden_units);
+    if(decoder_residual != nullptr)
+        Vec_t* rsd;
+        rsd = reinterpret_cast<Vec_t*>(decoder_residual + blockIdx.x * hidden_units);
     for(int idx = threadIdx.x; idx < hidden_units/vec_size; idx+=blockDim.x){
         //每个线程取出一个float4
         Vec_t vec = dout[idx];
-        rsd[idx] = vec;//保存当前值作为residual
+        if(decoder_residual != nullptr)
+            rsd[idx] = vec;//保存当前值作为residual
         // 平方
         thread_sum += vec.x * vec.x;
         thread_sum += vec.y * vec.y;
