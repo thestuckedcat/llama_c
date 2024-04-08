@@ -1,5 +1,5 @@
 #include<stdio.h>
-#include"src/kernels/rmsnorm_kernel.h"
+#include"src/kernels/rmsnorm.h"
 
 // 函数接受每个线程的val，函数返回warp内所有这些值的总和(thread0)。
 template<typename T>
@@ -38,7 +38,7 @@ __device__ T blockReduceSum(T val){
 
     // 存入warpsum
     if(laneid == 0){
-        warpsum[wid] = val;
+        warpsum[tid] = val;
     }
     __syncthreads();
     // 为block前warpnum个thread分配这些sum，然后使用warpreduce再次计算
@@ -58,15 +58,18 @@ __global__ void RMSNorm(T* decoder_in,  //[num tokens(batch size), q_hidden_unit
                         int num_tokens, 
                         int hidden_units){
     // 平方每个数据
-    int vec_size = Vec<T>::size();
+    int vec_size = Vec<T>::size;
     using Vec_t = typename Vec<T>::type;
 
     float thread_sum = 0.0f;
     // 将当前block对应的decoder_in数据切割
     Vec_t* dout = reinterpret_cast<Vec_t*>(decoder_in + blockIdx.x * hidden_units);//注意我们的blockDim.x实际上是hidden_units/vec_size，这里容易搞混
+
+    Vec_t* rsd = nullptr;
     if(decoder_residual != nullptr)
-        Vec_t* rsd;
+    {
         rsd = reinterpret_cast<Vec_t*>(decoder_residual + blockIdx.x * hidden_units);
+    }
     for(int idx = threadIdx.x; idx < hidden_units/vec_size; idx+=blockDim.x){
         //每个线程取出一个float4
         Vec_t vec = dout[idx];
@@ -115,7 +118,7 @@ __global__ void RMSNorm(half* decoder_out, // [num tokens, q_hidden_units]
                         int num_tokens, 
                         int hidden_units){
     int vec_size = Vec<half>::size;
-    using Vec_t = typename Vec<half>::Type;
+    using Vec_t = typename Vec<half>::type;
     int batch_id = blockIdx.x;
     int tid = threadIdx.x;
     Vec_t* s; 
@@ -155,7 +158,7 @@ __global__ void RMSNorm(half* decoder_out, // [num tokens, q_hidden_units]
 template<typename T>
 void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
                     TensorWrapper<T>* decoder_residual,   
-                    LayerNormWeight<T>& attn_norm_weight,//RMSNorm weights
+                    LayerNormWeight<T>* attn_norm_weight,//RMSNorm weights
                     float eps,//RMSnorm eps
                     bool is_last// print last rmsnorm output
                     ){
@@ -171,7 +174,7 @@ void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
     dim3 block(num_threads);
     RMSNorm<T><<<grid,block>>>( decoder_out->data,
                                 rsd,
-                                attn_norm_weight,
+                                attn_norm_weight->gamma,
                                 eps,
                                 num_tokens,
                                 hidden_units);
@@ -182,13 +185,13 @@ void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
 
 template void launchRMSNorm( TensorWrapper<float>* decoder_out, // [num tokens, hidden_units]
                     TensorWrapper<float>* decoder_residual,
-                    LayerNormWeight<float>& attn_norm_weight, //RMSNorm weights
+                    LayerNormWeight<float>* attn_norm_weight, //RMSNorm weights
                     float eps, //RMSNorm eps
                     bool is_last
                     );
 template void launchRMSNorm( TensorWrapper<half>* decoder_out, // [num tokens, hidden_units]
                     TensorWrapper<half>* decoder_residual,
-                    LayerNormWeight<half>& attn_norm_weight, //RMSNorm weights
+                    LayerNormWeight<half>* attn_norm_weight, //RMSNorm weights
                     float eps, //RMSNorm eps
                     bool is_last
                     );
