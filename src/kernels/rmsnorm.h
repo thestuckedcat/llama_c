@@ -7,6 +7,8 @@
 #include"src/utils/vectorize_utils.h"
 
 template<typename T>
-void launchRMSNorm( TensorWrapper<T>* decoder_in,// [num tokens, hidden units]
-                    LayerNormWeight<T>& attention_norm_weight, // gamma
-                    float epsilon);
+void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
+                    TensorWrapper<T>* decoder_residual,   
+                    LayerNormWeight<T>* attn_norm_weight,//RMSNorm weights
+                    float eps//RMSnorm eps
+                    );

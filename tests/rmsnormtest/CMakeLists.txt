@@ -1,0 +1,2 @@
+add_executable(rmsnorm_test rmsnorm_test)
+target_link_libraries(rmsnorm_test kernels utils weights)

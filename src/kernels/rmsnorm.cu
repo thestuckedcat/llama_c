@@ -1,5 +1,27 @@
 #include<stdio.h>
 #include"src/kernels/rmsnorm.h"
+#include<iostream>
+/*
+    该算子对输入[num_tokens, q_hidden_units]的每一个token vector[q_hidden_units]进行RMSNorm归一化
+
+    RMSNorm(x) = gamma * (x_i) / sqrt(1/H * sum(x^2_i) + epsilon) 
+
+    具体流程如下，考虑某个token的embedding vector[a1 a2 a3 a4]
+
+    每个block处理一个token
+
+    设置向量化读取长度为2
+
+    因此，对于thread1,thread2分别处理a1^2+a2^2,a3^2+a4^2
+
+    考虑一个已经被学习的weights = [1,1,1,1]
+    thread1负责计算缩放值scale = 1/sqrt[(a1^2+a2^2+a3^2+a4^2)/4 + eps] 
+
+    每个线程再获取缩放值scale，执行scale*a1*weight[0]等计算
+*/
+
+
+
 
 // 函数接受每个线程的val，函数返回warp内所有这些值的总和(thread0)。
 template<typename T>
@@ -38,7 +60,7 @@ __device__ T blockReduceSum(T val){
 
     // 存入warpsum
     if(laneid == 0){
-        warpsum[tid] = val;
+        warpsum[warpid] = val;//注意这里是warpid
     }
     __syncthreads();
     // 为block前warpnum个thread分配这些sum，然后使用warpreduce再次计算
@@ -81,9 +103,13 @@ __global__ void RMSNorm(T* decoder_in,  //[num tokens(batch size), q_hidden_unit
         thread_sum += vec.z * vec.z;
         thread_sum += vec.w * vec.w;
     }
+    
     thread_sum = blockReduceSum<float>(thread_sum);
+    __syncthreads();
 
-
+    if(threadIdx.x == 0){
+        printf("GPU: The %d th token sum is %f\n", blockIdx.x, thread_sum);
+    }
 
 
 
@@ -92,9 +118,14 @@ __global__ void RMSNorm(T* decoder_in,  //[num tokens(batch size), q_hidden_unit
     // 对于每个block的
     if(threadIdx.x == 0){
         //快速计算float倒数平方根(reciprocal square root)
-        inv_mean = rsqrtf(thread_sum / hidden_units + epsilon);
+        inv_mean = rsqrtf((float)thread_sum / hidden_units + epsilon);
     }
     __syncthreads();
+
+    if(threadIdx.x == 0){
+        printf("GPU: The %d th token denominator is %f\n", blockIdx.x, inv_mean);
+    }
+
 
     //修改输出
     Vec_t* g = reinterpret_cast<Vec_t*>(gamma);
@@ -102,10 +133,11 @@ __global__ void RMSNorm(T* decoder_in,  //[num tokens(batch size), q_hidden_unit
         Vec_t vec = dout[idx];
         dout[idx].x = vec.x * inv_mean * g[idx].x;
         dout[idx].y = vec.y * inv_mean * g[idx].y;
-        dout[idx].x = vec.z * inv_mean * g[idx].z;
-        dout[idx].x = vec.w * inv_mean * g[idx].w;
+        dout[idx].z = vec.z * inv_mean * g[idx].z;
+        dout[idx].w = vec.w * inv_mean * g[idx].w;
         
     }
+
 }
 
 
@@ -117,6 +149,7 @@ __global__ void RMSNorm(half* decoder_out, // [num tokens, q_hidden_units]
                         float eps, //RMSNorm eps
                         int num_tokens, 
                         int hidden_units){
+
     int vec_size = Vec<half>::size;
     using Vec_t = typename Vec<half>::type;
     int batch_id = blockIdx.x;
@@ -159,8 +192,7 @@ template<typename T>
 void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
                     TensorWrapper<T>* decoder_residual,   
                     LayerNormWeight<T>* attn_norm_weight,//RMSNorm weights
-                    float eps,//RMSnorm eps
-                    bool is_last// print last rmsnorm output
+                    float eps//RMSnorm eps
                     ){
     int num_tokens = decoder_out->shape[0];
     int hidden_units = decoder_out->shape[1];
@@ -169,7 +201,8 @@ void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
     int num_threads = hidden_units / vec_size;
 
     T* rsd = decoder_residual->data;
-
+    //rsd = nullptr;
+    //std::cout << num_tokens << " " << num_threads << std::endl;
     dim3 grid(num_tokens);
     dim3 block(num_threads);
     RMSNorm<T><<<grid,block>>>( decoder_out->data,
@@ -178,22 +211,26 @@ void launchRMSNorm( TensorWrapper<T>* decoder_out, //[num tokens, hidden_units]
                                 eps,
                                 num_tokens,
                                 hidden_units);
-
-    
+    /*
+    cudaError_t error = cudaGetLastError();
+    if(error != cudaSuccess){
+        std::cout << "kernel wrong" << std::endl;
+    }else{
+        std::cout << "kernel successfully " << std::endl;
+    }
+    */
 }
 
 
 template void launchRMSNorm( TensorWrapper<float>* decoder_out, // [num tokens, hidden_units]
                     TensorWrapper<float>* decoder_residual,
                     LayerNormWeight<float>* attn_norm_weight, //RMSNorm weights
-                    float eps, //RMSNorm eps
-                    bool is_last
+                    float eps//RMSNorm eps
                     );
 template void launchRMSNorm( TensorWrapper<half>* decoder_out, // [num tokens, hidden_units]
                     TensorWrapper<half>* decoder_residual,
                     LayerNormWeight<half>* attn_norm_weight, //RMSNorm weights
-                    float eps, //RMSNorm eps
-                    bool is_last
+                    float eps //RMSNorm eps
                     );
 
 

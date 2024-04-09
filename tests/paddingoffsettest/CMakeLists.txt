@@ -1,2 +1,2 @@
-add_executable(test padding_offset_test.cu)
-target_link_libraries(test kernels utils weights)
+add_executable(paddingoffset_test padding_offset_test.cu)
+target_link_libraries(paddingoffset_test kernels utils weights)

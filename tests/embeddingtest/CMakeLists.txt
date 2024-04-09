@@ -1,0 +1,2 @@
+add_executable(embedding_test embedding_input_test.cu)
+target_link_libraries(embedding_test kernels utils weights)
