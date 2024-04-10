@@ -1,19 +1,27 @@
 #include "src/kernels/build_causal_mask.h"
 
 /*
-    输出:mask:
-    输入:qlength: [batch_size]也就是句子个数
-        klength: [batch_size]
-        mask: [batch_size, max_q_length,max_k_length]
+    参数:
+    batch_size就是句子个数，
 
-        max_k_length:当前轮次最大的上下文长度,max(k_lens)
-        max_q_length:当前轮次batch中最大的句子长度, max(q_lens)
+    max_q_len：所有batch中的最大query个数
 
-        输入的klength就是context length，qlength就是decoder输入的length
+    max_k_len: 所有batch中的最大key个数
 
-    此处mask是考虑过去上下文的，也就是mask考虑过去上下文的长度，
+    mask: [batch_size, max_q_len, max_k_len]的01矩阵，其中1代表可访问/在视野内
+
+    q_lens: [batch_size]， 每个句子的query
+
+    k_lens: [batch_size], 每个句子的key
+
+
+    在本次实现的Decoder-only架构中，每个句子会通过self-masked-attention，因此q_lens与k_lens应该是相同的。
+
+    这种写法是常规的Transformer写法，考虑了Decoder的attention使用Encoder的KV以及自身的Q，此时会导致q_lens和k_lens不同的情况。
+
 
 */
+
 template<typename T>
 __global__ void BuildCausalMasksConsideringContextPastKV(   T* mask,
                                                             const int* q_lens,

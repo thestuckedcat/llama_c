@@ -4,11 +4,22 @@
 #include<random>
 /*
     参数:
-    batch_size就是句子个数，max_k_len就是上下文带回答的长度，max_q_len就是回答的长度
+    batch_size就是句子个数，
+
+    max_q_len：所有batch中的最大query个数
+
+    max_k_len: 所有batch中的最大key个数
 
     mask: [batch_size, max_q_len, max_k_len]的01矩阵，其中1代表可访问/在视野内
 
-    q_lens: [batch_size]， 
+    q_lens: [batch_size]， 每个句子的query
+
+    k_lens: [batch_size], 每个句子的key
+
+
+    在本次实现的Decoder-only架构中，每个句子会通过self-masked-attention，因此q_lens与k_lens应该是相同的。
+
+    这种写法是常规的Transformer写法，考虑了Decoder的attention使用Encoder的KV以及自身的Q，此时会导致q_lens和k_lens不同的情况。
 
 
 */
