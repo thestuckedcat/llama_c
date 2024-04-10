@@ -13,8 +13,6 @@
 
     此处mask是考虑过去上下文的，也就是mask考虑过去上下文的长度，
 
-     
-
 */
 template<typename T>
 __global__ void BuildCausalMasksConsideringContextPastKV(   T* mask,
@@ -36,6 +34,8 @@ __global__ void BuildCausalMasksConsideringContextPastKV(   T* mask,
 
         bool is_one = q < qlen && k < klen && k<= q + (klen - qlen) && k >= klen-qlen;
         mask[offset] = static_cast<T>(is_one);
+
+        offset += blockDim.x;
     }
 
 }

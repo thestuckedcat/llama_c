@@ -1,3 +1,4 @@
 add_subdirectory(paddingoffsettest)
 add_subdirectory(embeddingtest)
 add_subdirectory(rmsnormtest)
+add_subdirectory(casualmasktest)

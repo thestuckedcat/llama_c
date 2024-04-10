@@ -1,0 +1,2 @@
+add_executable(casualMaskTest casual_mask_test.cu)
+target_link_libraries(casualMaskTest kernels utils weights)
