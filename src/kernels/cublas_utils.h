@@ -70,4 +70,11 @@ public:
                             float f_alpha,
                             float f_beta);
 
+
+    // Transpose接口
+    void cublasWrapper::Transpose(  int m,
+                                int n,
+                                float* d_C// Matrix to be transpose
+                                );
+
 };

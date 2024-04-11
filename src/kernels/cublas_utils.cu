@@ -2,6 +2,7 @@
 # include <iostream>
 # include "src/utils/macro.h"
 
+
 cublasWrapper::cublasWrapper(cublasHandle_t cublas_handle)
     :cublas_handle_(cublas_handle)
 {}
@@ -28,6 +29,7 @@ void cublasWrapper::setFP16GemmConfig(){
 // 默认A = [m,k],B = [k,n],C = [m,n],注意传入m,n,k的时候必须是考虑了trans的实际可直接执行的矩阵乘法的mnk
 // 调用cublasGemmStrideBatchedEx
 // CUDA的GEMM可以理解为 C = α*A*B + β*C
+// <type> array of dimensions lda x k with lda>=max(1,m) if transa == CUBLAS_OP_N and lda x m with lda>=max(1,k) otherwise.
 void cublasWrapper::Gemm(  cublasOperation_t transa,
                 cublasOperation_t transb,
                 const int m,
@@ -155,7 +157,50 @@ void cublasWrapper::strideBatchedGemm(  cublasOperation_t transa,
         computeType,
         CUBLAS_GEMM_DEFAULT
     ));
-}                                        
+}   
+
+
+
+// Used to transpos matrix A
+void cublasWrapper::Transpose(  int m,
+                                int n,
+                                float* d_C// Matrix to be transpose
+                                )
+{
+    /*
+        C = α op(A) + β op(B)
+
+        lda,ldb affected by trans
+
+        m: number of rows of matrix op(A) and C.
+
+        n: number of columns of matrix op(B) and C.
+
+
+    */
+    float alpha = 1.0f;
+    float beta = 0.0f;
+    int ldc_t = n;
+
+    float* Newresult;
+    CHECK(cudaMalloc((void**)&Newresult, sizeof(float) * m*n));
+    cublasStatus_t status = cublasSgeam(cublas_handle_,
+                                     CUBLAS_OP_T, // 操作A，转置
+                                     CUBLAS_OP_N, // 操作B，不变，因为B不被用到
+                                     n,           // 矩阵C'的行数（原C的列数）
+                                     m,           // 矩阵C'的列数（原C的行数）
+                                     &alpha,      // A的乘数系数
+                                     d_C,         // 原矩阵C
+                                     m,           // 原C的领先维度
+                                     &beta,       // B的乘数系数，设置为0因为B不被使用
+                                     NULL,        // B，未使用
+                                     ldc_t,       // B的领先维度，未使用
+                                     Newresult, // 结果矩阵C'
+                                     ldc_t);      // 结果矩阵C'的领先维度
+
+    CHECK(cudaMemcpy(d_C, Newresult, sizeof(float) * m * n, cudaMemcpyDeviceToDevice));
+    cudaFree(Newresult);
+}
 
 
 

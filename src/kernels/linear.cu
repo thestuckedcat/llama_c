@@ -81,49 +81,138 @@
 */
 
 
-
-
-
-
-// 这里的写法目前只CHECK了矩阵B会转置，矩阵A默认不会转置
 /*
     ***********************************************
-    注意，cublas传入ld时，这个ld是与当前的trans无关的，ld是存储的矩阵本身的一个属性
+    传入CUBLAS时，我们需要理清几点
+    m,n,k：代表trans之后的op(A) * op(B)时，应该是[m,k]*[k,n]
+    lda,ldb,ldc：代表trans之后op(A)的行数，op(B)的行数
 
-    而m,n,k才是与trans有关的
+
 
     此处，一种应用中，理想的是[bs,hidden]*[hidden,vocabulary]
     最后获得bs个[1*vocabulary]去进行softmax，获得batchsize个词
 */
 template<typename T>
-__device__ void launchLinearGemm(   TensorWrapper<T>* input, 
-                                    BaseWeight<T>& weight,
+__device__ void launchLinearGemm(   TensorWrapper<T>* input1, 
+                                    TensorWrapper<T>* input2,
                                     TensorWrapper<T>* output, 
                                     cublasWrapper* cublas_wrapper,//cublas的功能集合
                                     bool trans_a,
-                                    bool trans_b)
+                                    bool trans_b,
+                                    bool trans_c)
 {
-    LLM_CHECK_WITH_INFO(trans_a == true, "Attemp to trans matrix A, which situation is not considered ");
+    //使用该函数时，input1为左矩阵，input2为右矩阵，应该已经考虑转置，并获得一个行主序的output
+    
+    /*
 
+        处理两种shape
+
+        第一种是传统的二维矩阵相乘
+
+        第二种是在自回归生成时，计算添加进KV cache的vector
+        [bs, 1, hiddenunits] * [vocabulary, hiddenunits]
+        这种方式下，实际上data也是可以被看做[bs,hidden_units]的组织形式的
+
+
+        同时，这里考虑如果trans_c = true,那么本来的
+
+        Output = Tensor * Weight
+
+        就变成了
+
+        Output^T = Weight^T * Tensor^T
+
+        在这种情况下，应该额外将output数据转置，以获得行主序的data。
+    */
     cublasOperation_t transA = trans_a ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB = trans_b ? CUBLAS_OP_T : CUBLAS_OP_N;
 
-
     // CHECK
-    if(!trans_a && trans_b){
-        // CHECK [bs,1,hiddenunits] * [vocabulary, hiddenunits]的写法
-        if(input->shape.size() == 3){
-            LLM_CHECK_WITH_INFO(input->shape[2] == weight.shape[1],"while trans_b and input dimension is 3, the dimension is wrong:input->shape[2] != weight.shape[1]");
-        }else{
-            // [batch_size, hidden_units] * [vocabulary, hiddenunits]
-            LLM_CHECK_WITH_INFO(input->shape[1] == weight.shape[1],"while trans_b, second dimension of B must be equal to second dimension of second dimension");
+    int input1_1 = -1;
+    int input1_2 = -1;
+    int intpu2_1 = -1;
+    int input2_2 = -1;
+    if(input2->shape.size() > 2 || input1->shape.size() > 2){
+        //CHECK TYPE2
+        LLM_CHECK_WITH_INFO(input2->shape.size() <= 3 && input1->shape.size() <= 3, 
+                            "Wrongly use Gemm with four or more dimension matrix");
+        if(input1->shape.size() == 3){
+            input1_1 = input1->shape[0];
+            input1_2 = input1->shape[2];
+        }else if(input1->shape.size() == 2){
+            input1_1 = input1->shape[0];
+            input1_2 = input1->shape[1];
         }
+
+        if(input2->shape.size() == 3){
+            input2_1 = input1->shape[0];
+            input2_2 = input1->shape[2];
+        }else if(input2->shape.size() == 2){
+            input2_1 = input1->shape[0];
+            input2_2 = input1->shape[1];
+        }
+
+        LLM_CHECK_WITH_INFO(input1_1 > 0 && 
+                            input1_2 > 0 &&
+                            input2_1 > 0 &&
+                            input2_2 > 0,
+                            "Some thing wrong with SHAPE while check Gemm Type 1");
+
+        if(trans_a && trans_b){
+            LLM_CHECK_WITH_INFO(input1_1 == input2_2, 
+                                "All trans and shape wrong");
+        }else if(trans_a && !trans_b){
+            LLM_CHECK_WITH_INFO(input1_1 == input2_1, 
+                                "trans_a and shape wrong");
+        }else if(!trans_a && trans_b){
+            LLM_CHECK_WITH_INFO(input1_2 == input2_2, 
+                                "trans_b and shape wrong");
+        }else{
+            //!trans_a && !trans_b
+            LLM_CHECK_WITH_INFO(input1_2 == input2_1, 
+                                "No trans and shape wrong");
+        }
+
+    }
+    else if(input2->shape.size() == 2 && input1->shape.size() == 2)
+    {
+        // CHECK TYPE1
+        input1_1 = input1->shape[0];
+        input1_2 = input1->shape[1];
+        input2_1 = input2->shape[0];
+        input2_2 = input2->shape[1];
+
+        LLM_CHECK_WITH_INFO(input1_1 > 0 && 
+                            input1_2 > 0 &&
+                            input2_1 > 0 &&
+                            input2_2 > 0,
+                            "Some thing wrong with SHAPE while check Gemm Type 1");
+
+        if(trans_a && trans_b){
+            LLM_CHECK_WITH_INFO(input1_1 == input2_2, 
+                                "All trans and shape wrong");
+        }else if(trans_a && !trans_b){
+            LLM_CHECK_WITH_INFO(input1_1 == input2_1, 
+                                "trans_a and shape wrong");
+        }else if(!trans_a && trans_b){
+            LLM_CHECK_WITH_INFO(input1_2 == input2_2, 
+                                "trans_b and shape wrong");
+        }else{
+            //!trans_a && !trans_b
+            LLM_CHECK_WITH_INFO(input1_2 == input2_1, 
+                                "No trans and shape wrong");
+        }
+        
+    }else{
+        LLM_CHECK_WITH_INFO(false,
+                            "The input shape is neither the two type in GEMM, wrong call");
     }
 
-    // 仅考虑规范传入,暂时不考虑[batch_size,1,hiddenunits]的情况
-    int m = trans_a ? input->shape[1] : input->shape[0];
-    int k = trans_a ? input->shape[0] : input->shape[1];
-    int n = trans_b ? weight.shape[0] : weight.shape[1];
+
+    //Set m,k,n,考虑到output实际上没有数据，所以不管
+    int m = trans_a ? input1_2 : input1_1;
+    int k = trans_a ? input1_1 : input1_2; 
+    int n = trans_b ? input2_1 : input2_2;
     int lda = m;
     int ldb = k;
     int ldc = m;
@@ -143,7 +232,21 @@ __device__ void launchLinearGemm(   TensorWrapper<T>* input,
         1.0f,
         0.0f
     );
+
+
+    // 根据trans_c考虑是否需要返回转置的output
+    if(trans_c){
+        cublas_wrapper->Transpose(m,n,output->data);
+    }
 }
+
+
+
+/************
+ * 未完成
+*/
+
+
 
 // 仅考虑的是四维向量[a,b,c,d]*[a,b,d,c]
 template<typename T>
