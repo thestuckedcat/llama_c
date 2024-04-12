@@ -291,7 +291,7 @@ void launchLinearStrideBatchGemm(   TensorWrapper<T>* input1,
             input1->shape[count] == input2->shape[count]
         &&  input1->shape[count] == output->shape[count],
         "Broad cast is not available, something wrong with batch_size");
-        batchCount*= input1
+        batchCount*= input1->shape[count];
         count++;
     }
 
