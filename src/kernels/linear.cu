@@ -101,7 +101,7 @@ __device__ void launchLinearGemm(   TensorWrapper<T>* input1,
                                     bool trans_b,
                                     bool trans_c)
 {
-    //使用该函数时，input1为左矩阵，input2为右矩阵，应该已经考虑转置，并获得一个行主序的output
+    //使用该函数时，input1为左矩阵，input2为右矩阵，应该考虑转置，并获得一个行主序的output
     
     /*
 
@@ -255,30 +255,57 @@ void launchLinearStrideBatchGemm(   TensorWrapper<T>* input1,
                                     TensorWrapper<T>* output,
                                     cublasWrapper* cublas_wrapper,
                                     bool trans_a,
-                                    bool trans_b)
+                                    bool trans_b,
+                                    bool trans_c)
 {
     cublasOperation_t transA = trans_a ? CUBLAS_OP_T : CUBLAS_OP_N;
     cublasOperation_t transB = trans_b ? CUBLAS_OP_T : CUBLAS_OP_N;
 
-    int m = trans_a ? input1->shape[3] : input1->shape[2];
-    int k = trans_a ? input1->shape[2] : input1->shape[3];
-    int n = trans_b ? input2->shape[2] : input2->shape[3];
+    //目前支持n维矩阵无broadcast乘法
+    LLM_CHECK_WITH_INFO(input1->shape.size() == input2->shape.size() 
+                    &&  input1->shape.size() == output->shape.size(),
+                    "Wrong shape in Batched Gemm, where broadcast is not available");
+    int nrow = input1->shape.size() - 2;
+    int ncol = input1->shape.size() - 1;
+
+    // shape CHECK
+    if(trans_a && trans_b){
+        LLM_CHECK_WITH_INFO(input1->shape[nrow] == input2->shape[ncol],
+                            "BatchGemm, A and B both trans, SOMETHING WORNG WITH SHAPE");
+    }else if(trans_a && !trans_b){
+        LLM_CHECK_WITH_INFO(input1->shape[nrow] == input2->shape[nrow],
+                            "BatchGemm, A trans, SOMETHING WORNG WITH SHAPE");
+    }else if(!trans_a && trans_b)
+    {
+        LLM_CHECK_WITH_INFO(input1->shape[ncol] == input2->shape[ncol],
+                            "BatchGemm, B trans, SOMETHING WORNG WITH SHAPE");
+    }else{
+        LLM_CHECK_WITH_INFO(input1->shape[ncol] == input2->shape[nrow],
+                            "BatchGemm, A and B no trans, SOMETHING WORNG WITH SHAPE");
+    }
+    
+    int batchCount = 1;
+    int count = 0;
+    while(count < input1->shape.size()-2){
+        LLM_CHECK_WITH_INFO(
+            input1->shape[count] == input2->shape[count]
+        &&  input1->shape[count] == output->shape[count],
+        "Broad cast is not available, something wrong with batch_size");
+        batchCount*= input1
+        count++;
+    }
+
+    int m = !trans_a ? input1->shape[nrow] : input1->shape[ncol];
+    int k = !trans_a ? input1->shape[ncol] : input1->shape[nrow];
+    int n = !trans_b ? input2->shape[ncol] : input2->shape[nrow];
     int lda = m;
     int ldb = n;
     int ldc = m;
     int64_t strideA = m*k;
     int64_t strideB = k*n;
     int64_t strideC = m*n;
-    /*
-        此处未添加
-        1. 前两维审查机制
-        2. 多维的拓展（优先级低）
-        3. 前两维不同时的broadcast
+
     
-    */
-    int batchCount = input1->shape[0] * input1->shape[1];
-
-
     cublas_wrapper->strideBatchedGemm(
         transA,
         transB,
