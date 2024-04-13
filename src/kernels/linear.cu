@@ -101,7 +101,19 @@ __device__ void launchLinearGemm(   TensorWrapper<T>* input1,
                                     bool trans_b,
                                     bool trans_c)
 {
-    //使用该函数时，input1为左矩阵，input2为右矩阵，应该考虑转置，并获得一个行主序的output
+    /*
+        使用该函数时，使用最终矩阵，这意味着矩阵已经完成了列主序的构造，否则使用trans来模拟列主序
+        
+        例如，对于行主序的C = A * B^T,
+        这意味着对于原本的计算,trans_a = false, trans_b = true
+        因为是行主序输入，因此trans_c=true，代表我们实际上计算时应该为
+        C^T = B * A^T
+        
+        这意味着，输入时，你的输入为
+        input1 = B, input2 = A, trans_a = false, trans_b = true, trans_c = true
+    */
+
+    // input1为左矩阵，input2为右矩阵，应该考虑转置，并获得一个行主序的output
     
     /*
 
