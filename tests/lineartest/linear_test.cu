@@ -3,8 +3,9 @@
 #include<iostream>
 #include<random>
 #include"src/kernels/cublas_utils.h"
-#include"utils/tensor.h"
+#include"src/utils/tensor.h"
 #include<algorithm>
+#include"cublas_v2.h"
 /*
     测试两种矩阵乘法
 
@@ -127,9 +128,9 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
 
     // data:input1, input2, h_output, d_output
     // shape: input1, input2, output
-    int input1_size = std::accumulate(shape[0].begin(),shape[0].end,1,std::multiplies<int>());
-    int input2_size = std::accumulate(shape[1].begin(),shape[1].end,1,std::multiplies<int>());
-    int output_size = std::accumulate(shape[3].begin(),shape[3].end,1,std::multiplies<int>());
+    int input1_size = std::accumulate(shape[0].begin(),shape[0].end(),1,std::multiplies<int>());
+    int input2_size = std::accumulate(shape[1].begin(),shape[1].end(),1,std::multiplies<int>());
+    int output_size = std::accumulate(shape[3].begin(),shape[3].end(),1,std::multiplies<int>());
 
     // Apply cuda resources
     float* input1;
@@ -148,7 +149,7 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
 
     TensorWrapper<float> *right_matrix;
 
-    TensorWrapper<float> *output_matrix = new TensorWrapper( Device::GPU,
+    TensorWrapper<float> *output_matrix = new TensorWrapper<float>( Device::GPU,
                                                     float_type,
                                                     shape[3],
                                                     output);
@@ -161,11 +162,11 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
         // 如果为行主序，需要转成列主序,C = A * B->C^T = B^T * A^T
         // 两步： 交换左右矩阵顺序，dimension判定是否trans
         // dimension依据以下顺序判断：是否已经满足矩阵乘要求，是否右矩阵需要转置，是否左矩阵需要转置，是否都需要转置
-        left_matrix = new TensorWrapper(Device::GPU,
+        left_matrix = new TensorWrapper<float>(Device::GPU,
                                         float_type,
                                         shape[1],
                                         input2);
-        right_matrix = new TensorWrapper(   Device::GPU,
+        right_matrix = new TensorWrapper<float>(   Device::GPU,
                                             float_type,
                                             shape[0],
                                             input1);                                       
@@ -177,12 +178,12 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
         
     }else{
         // 列主序，已经满足要求
-        left_matrix = new TensorWrapper(Device::GPU,
+        left_matrix = new TensorWrapper<float>(Device::GPU,
                                         float_type,
                                         shape[0],
                                         input1);
         
-        right_matrix = new TensorWrapper(Device::GPU,
+        right_matrix = new TensorWrapper<float>(Device::GPU,
                                         float_type,
                                         shape[1],
                                         input2);
@@ -194,11 +195,11 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
     }
 
     // 判断shape是否正确
-    int dim_size = left_matrxi.shape.size();
-    int row_a = !trans_a ? left_matrix.shape[dim_size - 2] : left_matrix.shape[dim_size - 1];
-    int col_a = !trans_a ? left_matrix.shape[dim_size - 1] : left_matrix.shape[dim_size - 2];
-    int row_b = !trans_b ? right_matrix.shape[dim_size - 2] : right_matrix.shape[dim_size - 1];
-    int col_b = !trans_b ? right_matrix.shape[dim_size - 1] : right_matrix.shape[dim_size - 2];
+    int dim_size = left_matrix->shape.size();
+    int row_a = !trans_a ? left_matrix->shape[dim_size - 2] : left_matrix->shape[dim_size - 1];
+    int col_a = !trans_a ? left_matrix->shape[dim_size - 1] : left_matrix->shape[dim_size - 2];
+    int row_b = !trans_b ? right_matrix->shape[dim_size - 2] : right_matrix->shape[dim_size - 1];
+    int col_b = !trans_b ? right_matrix->shape[dim_size - 1] : right_matrix->shape[dim_size - 2];
 
     if(col_a == row_b){
         //满足要求
@@ -212,7 +213,7 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
     }
 
     if(shape[0].size() == 2)
-        launchLinearGemm(   left_matrix,
+        launchLinearGemm<float>(   left_matrix,
                             right_matrix, 
                             output_matrix,
                             cublas_wrapper,
@@ -220,7 +221,7 @@ void GPU_gemm(const std::vector<std::vector<int>>& shape,
                             trans_b,
                             trans_c);
     else if(shape[0].size() > 2)
-        launchLinearStrideBatchGemm(left_matrix,
+        launchLinearStrideBatchGemm<float>(left_matrix,
                                     right_matrix,
                                     output_matrix,
                                     cublas_wrapper,
@@ -300,9 +301,34 @@ std::vector<float*> generate_data(const std::vector<std::vector<int>>& shape){
 
 
 int main(){
-    std::vector<std::vector<int>> shape{{}}
-    std::vector<float>* data = generate_data(shape, trans_a, trans_b);
+    cublasHandle_t handle;
+    cublasStatus_t status = cublasCreate(&handle);
+    
+    if(status != CUBLAS_STATUS_SUCCESS){}
+
+
+    cublasWrapper *cublasWrapper = new cublasWrapper(handle);
+
+
+
+    // Gemm, type1
+    std::vector<std::vector<int>> shape{{10,20},{20,20},{10,20}};
+    bool trans_a = false;
+    bool trans_b = false;
+
+    std::vector<float*> data = generate_data(shape);
+
+    bool is_row_leading = true;
 
     CPU_gemm(shape, data, trans_a, trans_b);
-    GPU_gemm(shape, data, is_row_leading, cublas_wrapper, trans_a, trans_b);
+    GPU_gemm(shape, data, is_row_leading, cublasWrapper, trans_a, trans_b);
+
+
+    if(CheckResult(shape, data)){
+        std::cout << "数据正确" << std::endl;
+    }
+
+
+
+    cublasDestroy(handle);
 }

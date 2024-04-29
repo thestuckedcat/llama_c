@@ -1,5 +1,5 @@
-add_executable(linearTest linear_test.cu)
-target_link_libraries(linearTest kernels utils weights)
+# add_executable(linearTest linear_test.cu)
+# target_link_libraries(linearTest kernels utils weights)
 
 # 添加Openblas库
 # set(OpenBLAS_DIR "D:/Openblas")

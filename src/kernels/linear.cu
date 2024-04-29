@@ -142,7 +142,7 @@ __device__ void launchLinearGemm(   TensorWrapper<T>* input1,
     // CHECK
     int input1_1 = -1;
     int input1_2 = -1;
-    int intpu2_1 = -1;
+    int input2_1 = -1;
     int input2_2 = -1;
     if(input2->shape.size() > 2 || input1->shape.size() > 2){
         //CHECK TYPE2
@@ -235,9 +235,9 @@ __device__ void launchLinearGemm(   TensorWrapper<T>* input1,
         m,
         n,
         k,
-        input->data,
+        input1->data,
         lda,
-        weight.data,
+        input2->data,
         ldb,
         output->data,
         ldc,
